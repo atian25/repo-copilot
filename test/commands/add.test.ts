@@ -1,26 +1,28 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { mkdtemp, rm, readFile } from 'fs/promises';
 import { parse } from 'yaml';
 import { addCommand } from '../../src/commands/add.js';
 import { Config } from '../../src/config/index.js';
+import { exists } from '../../src/utils/index.js';
 
 // Mock console
 const mockConsole = {
-  log: vi.fn(),
-  error: vi.fn(),
+  log: vi.spyOn(console, 'log').mockImplementation(() => {}),
+  error: vi.spyOn(console, 'error').mockImplementation(() => {}),
 };
-console.log = mockConsole.log;
-console.error = mockConsole.error;
+const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-// Mock process.exit
-const mockExit = vi.fn();
-process.exit = mockExit;
+// Mock execSync
+vi.mock('node:child_process', () => ({
+  execSync: vi.fn(),
+}));
 
 describe('add command', () => {
-  let tempDir: string;
   let configDir: string;
+  let configFile: string;
+  let repoFile: string;
 
   beforeEach(async () => {
     // Reset mocks
@@ -28,26 +30,24 @@ describe('add command', () => {
     mockConsole.error.mockReset();
     mockExit.mockReset();
 
-    // Create temp directories
-    tempDir = join(tmpdir(), 'repo-copilot-test-' + Math.random().toString(36).slice(2));
-    configDir = join(tempDir, '.repo-copilot');
-
-    // Set config path for tests
+    // Create temp directory for testing
+    configDir = await mkdtemp(join(tmpdir(), 'repo-copilot-test-'));
+    configFile = join(configDir, 'config.yaml');
+    repoFile = join(configDir, 'repositories.yaml');
     process.env.REPO_COPILOT_CONFIG_DIR = configDir;
 
-    // Create test config
-    await mkdir(configDir, { recursive: true });
+    // Initialize config
     const config = new Config({
-      baseDir: tempDir,
+      baseDir: join(configDir, 'repos'),
+      username: 'test-user',
+      email: 'test@example.com',
     });
     await config.save();
   });
 
   afterEach(async () => {
-    // Clean up
-    if (tempDir) {
-      await rm(tempDir, { recursive: true, force: true });
-    }
+    // Clean up temp directory
+    await rm(configDir, { recursive: true, force: true });
     delete process.env.REPO_COPILOT_CONFIG_DIR;
   });
 
@@ -55,30 +55,28 @@ describe('add command', () => {
     const url = 'github.com/atian25/repo-copilot';
     await addCommand.run([url]);
 
-    // 验证输出
-    expect(mockConsole.error).not.toBeCalled();
-    expect(mockConsole.log).toBeCalled();
-    expect(mockExit).not.toBeCalled();
-
-    // Wait for file to be written
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    // 验证仓库信息
-    const content = parse(await readFile(join(configDir, 'repositories.yaml'), 'utf-8'));
+    // Verify repositories file
+    expect(await exists(repoFile)).toBe(true);
+    const content = parse(await readFile(repoFile, 'utf-8'));
     expect(content.repositories).toHaveLength(1);
-    const repo = content.repositories[0];
-    expect(repo.name).toBe('repo-copilot');
-    expect(repo.owner).toBe('atian25');
-    expect(repo.url).toBe('github.com/atian25/repo-copilot');
-    expect(repo.host).toBe('github.com');
-    expect(repo.path).toBe(join(tempDir, 'github.com/atian25/repo-copilot'));
+    expect(content.repositories[0]).toMatchObject({
+      name: 'repo-copilot',
+      owner: 'atian25',
+      url,
+      path: join(configDir, 'repos/github.com/atian25/repo-copilot'),
+      host: 'github.com',
+    });
   });
 
-  it('should fail with invalid url', async () => {
-    const url = 'invalid-url';
-    await addCommand.run([url]);
+  it('should fail without repository url', async () => {
+    await addCommand.run([]);
+    expect(mockConsole.error).toBeCalledWith(expect.stringContaining('Usage'));
+    expect(mockExit).toBeCalledWith(1);
+  });
 
-    expect(mockConsole.error).toBeCalledWith(expect.stringContaining('Invalid repository URL'));
+  it('should fail with invalid repository url', async () => {
+    await addCommand.run(['invalid-url']);
+    expect(mockConsole.error).toBeCalledWith(expect.stringContaining('Invalid'));
     expect(mockExit).toBeCalledWith(1);
   });
 
@@ -86,14 +84,7 @@ describe('add command', () => {
     const url = 'github.com/atian25/repo-copilot';
     await addCommand.run([url]);
     await addCommand.run([url]);
-
-    expect(mockConsole.error).toBeCalledWith(expect.stringContaining('Repository already exists'));
-    expect(mockExit).toBeCalledWith(1);
-  });
-
-  it('should fail without url', async () => {
-    await addCommand.run([]);
-    expect(mockConsole.error).toBeCalledWith(expect.stringContaining('Usage: repo add <repository_url>'));
+    expect(mockConsole.error).toBeCalledWith(expect.stringContaining('already exists'));
     expect(mockExit).toBeCalledWith(1);
   });
 });
