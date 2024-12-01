@@ -28,6 +28,7 @@ async function main() {
     allowPositionals: true,
     options: {
       force: { type: 'boolean', short: 'f' },
+      yes: { type: 'boolean', short: 'y' },
       baseDir: { type: 'string', short: 'b' },
       username: { type: 'string', short: 'u' },
       email: { type: 'string', short: 'e' },
