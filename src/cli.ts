@@ -4,6 +4,7 @@ import { parseArgs, debuglog } from 'node:util';
 import chalk from 'chalk';
 import { helpCommand } from './commands/help.js';
 import { addCommand } from './commands/add.js';
+import { removeCommand } from './commands/remove.js';
 
 const log = debuglog('repo:cli');
 
@@ -16,6 +17,7 @@ interface Command {
 const commands: Command[] = [
   helpCommand,
   addCommand,
+  removeCommand,
 ];
 
 async function main() {

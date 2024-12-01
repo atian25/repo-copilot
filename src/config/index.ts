@@ -7,21 +7,19 @@ import { exists } from '../utils/index.js';
 
 const log = debuglog('repo:config');
 
-// 配置文件路径
-const CONFIG_DIR = join(homedir(), '.repo-copilot');
-const CONFIG_FILE = join(CONFIG_DIR, 'config.yaml');
-const REPOSITORIES_FILE = join(CONFIG_DIR, 'repositories.yaml');
-
-// 配置文件结构
-export interface Config {
-  baseDir: string;
-  format: string;
-  username: string;
-  email: string;
-  hosts: Record<string, HostConfig>;
+// 获取配置文件路径
+function getConfigPaths() {
+  const configDir = process.env.REPO_COPILOT_CONFIG_DIR || join(homedir(), '.repo-copilot');
+  return {
+    configDir,
+    configFile: join(configDir, 'config.yaml'),
+    repositoriesFile: join(configDir, 'repositories.yaml'),
+  };
 }
 
+// 配置文件结构
 export interface HostConfig {
+  token?: string;
   username?: string;
   email?: string;
 }
@@ -32,56 +30,79 @@ export interface Repository {
   url: string;
   path: string;
   host: string;
-  created_at: string;
+  created_at?: string;
 }
 
-// 默认配置
-const DEFAULT_CONFIG: Config = {
-  baseDir: join(homedir(), 'workspace'),
-  format: 'table',
-  username: '',
-  email: '',
-  hosts: {},
-};
+export class Config {
+  baseDir: string;
+  format: string;
+  username: string;
+  email: string;
+  hosts: Record<string, HostConfig>;
+  repositories: Repository[] = [];
 
-// 加载配置
-export async function loadConfig(): Promise<Config> {
-  if (!await exists(CONFIG_FILE)) {
-    return DEFAULT_CONFIG;
+  constructor(data: Partial<Config> = {}) {
+    this.baseDir = data.baseDir || join(homedir(), 'workspace');
+    this.format = data.format || 'table';
+    this.username = data.username || '';
+    this.email = data.email || '';
+    this.hosts = data.hosts || {};
+    if (data.repositories) {
+      this.repositories = data.repositories;
+    }
   }
 
-  const content = await readFile(CONFIG_FILE, 'utf-8');
-  const config = parse(content) as Config;
-  log('load config: %O', config);
-  return config;
-}
+  static async load(): Promise<Config> {
+    const config = new Config();
+    const { configFile, repositoriesFile } = getConfigPaths();
 
-// 保存配置
-export async function saveConfig(config: Config) {
-  if (!await exists(CONFIG_DIR)) {
-    await mkdir(CONFIG_DIR, { recursive: true });
+    // Load main config
+    if (await exists(configFile)) {
+      const content = await readFile(configFile, 'utf-8');
+      const data = parse(content);
+      if (data) {
+        config.baseDir = data.baseDir || config.baseDir;
+        config.format = data.format || config.format;
+        config.username = data.username || config.username;
+        config.email = data.email || config.email;
+        config.hosts = data.hosts || config.hosts;
+      }
+    }
+
+    // Load repositories
+    if (await exists(repositoriesFile)) {
+      const content = await readFile(repositoriesFile, 'utf-8');
+      const data = parse(content);
+      if (data && data.repositories) {
+        config.repositories = data.repositories;
+      }
+    } else {
+      await writeFile(repositoriesFile, stringify({ repositories: [] }, { indent: 2 }));
+    }
+
+    return config;
   }
-  await writeFile(CONFIG_FILE, stringify(config));
-  log('save config: %O', config);
-}
 
-// 加载仓库列表
-export async function loadRepositories(): Promise<Repository[]> {
-  if (!await exists(REPOSITORIES_FILE)) {
-    return [];
+  async save(): Promise<void> {
+    const { configDir, configFile, repositoriesFile } = getConfigPaths();
+
+    // Ensure config directory exists
+    await mkdir(configDir, { recursive: true });
+
+    // Save main config
+    const configData = {
+      baseDir: this.baseDir,
+      format: this.format,
+      username: this.username,
+      email: this.email,
+      hosts: this.hosts,
+    };
+    await writeFile(configFile, stringify(configData, { indent: 2 }));
+
+    // Save repositories
+    const repoData = {
+      repositories: this.repositories || [],
+    };
+    await writeFile(repositoriesFile, stringify(repoData, { indent: 2 }));
   }
-
-  const content = await readFile(REPOSITORIES_FILE, 'utf-8');
-  const repositories = parse(content) as { repositories: Repository[] };
-  log('load repositories: %O', repositories);
-  return repositories.repositories || [];
-}
-
-// 保存仓库列表
-export async function saveRepositories(repositories: Repository[]) {
-  if (!await exists(CONFIG_DIR)) {
-    await mkdir(CONFIG_DIR, { recursive: true });
-  }
-  await writeFile(REPOSITORIES_FILE, stringify({ repositories }));
-  log('save repositories: %O', repositories);
 }
