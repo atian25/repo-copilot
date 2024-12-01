@@ -6,8 +6,10 @@
 
 ## 开发规范
 1. 代码规范：
-  - 使用 TypeScript
   - 使用 ESLint
+  - 使用 TypeScript
+  - 在本地调试的时候不要编译 TypeScript
+
 2. 依赖管理
   - 使用 pnpm
   - 使用 npmmirror 作为镜像源

@@ -1,0 +1,46 @@
+{
+  "name": "repo-copilot",
+  "version": "1.0.0",
+  "description": "A CLI tool for managing multiple Git repositories",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "repo": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc",
+    "lint": "eslint .",
+    "test": "vitest",
+    "prepublishOnly": "pnpm build"
+  },
+  "keywords": [
+    "git",
+    "repository",
+    "management",
+    "cli"
+  ],
+  "author": "atian25",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@typescript-eslint/eslint-plugin": "^8.16.0",
+    "@typescript-eslint/parser": "^8.16.0",
+    "eslint": "^9.16.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.6"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "debug": "^4.3.7",
+    "yaml": "^2.6.1"
+  }
+}
