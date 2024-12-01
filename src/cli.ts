@@ -15,7 +15,7 @@ interface Command {
   run: (args: string[], options?: Record<string, any>) => Promise<void>;
 }
 
-const commands: Command[] = [
+export const commands: Command[] = [
   helpCommand,
   initCommand,
   addCommand,
