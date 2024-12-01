@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- 实现 init 命令，支持初始化配置
+- 添加 --force 选项，支持覆盖已有配置
+- 支持自定义 baseDir、username 和 email
+
+### Changed
+- 增强命令行参数解析，支持更多选项
+- 优化配置管理，添加 exists() 方法
+- 改进错误处理和日志输出
+
 ## [0.2.0] - 2024-01-09
 
 ### Added

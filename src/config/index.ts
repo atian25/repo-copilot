@@ -40,8 +40,11 @@ export class Config {
   email: string;
   hosts: Record<string, HostConfig>;
   repositories: Repository[] = [];
+  configDir: string;
 
   constructor(data: Partial<Config> = {}) {
+    const { configDir } = getConfigPaths();
+    this.configDir = configDir;
     this.baseDir = data.baseDir || join(homedir(), 'workspace');
     this.format = data.format || 'table';
     this.username = data.username || '';
@@ -50,6 +53,11 @@ export class Config {
     if (data.repositories) {
       this.repositories = data.repositories;
     }
+  }
+
+  static async exists(): Promise<boolean> {
+    const { configFile } = getConfigPaths();
+    return await exists(configFile);
   }
 
   static async load(): Promise<Config> {
