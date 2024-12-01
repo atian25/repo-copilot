@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { debuglog } from 'node:util';
 import chalk from 'chalk';
-import { loadConfig, loadRepositories, saveRepositories, type Repository } from '../config/index.js';
+import { Config, type Repository } from '../config/index.js';
 
 const debug = debuglog('repo:add');
 
@@ -9,51 +9,54 @@ export const addCommand = {
   name: 'add',
   description: 'Add a repository',
   async run(args: string[]) {
-    // 检查参数
-    if (args.length !== 1) {
+    if (args.length < 1) {
       console.error(chalk.red('Usage: repo add <repository_url>'));
       process.exit(1);
     }
 
     const url = args[0];
-    debug('add repository: %s', url);
-
-    // 解析仓库信息
-    const { owner, name, host } = parseRepositoryUrl(url);
-    if (!owner || !name || !host) {
+    let owner, name, host;
+    try {
+      ({ owner, name, host } = parseRepositoryUrl(url));
+    } catch (err) {
       console.error(chalk.red('Invalid repository URL'));
       process.exit(1);
     }
 
-    // 加载配置
-    const [config, repositories] = await Promise.all([
-      loadConfig(),
-      loadRepositories(),
-    ]);
+    try {
+      const config = await Config.load();
+      const path = join(config.baseDir, host, owner, name);
+      debug('parsed url: %s -> %o', url, { owner, name, host, path });
 
-    // 检查是否已存在
-    if (repositories.some(repo => repo.url === url)) {
-      console.error(chalk.red('Repository already exists'));
+      // Check if repository already exists
+      if (config.repositories.find(r => r.url === url)) {
+        console.error(chalk.red('Repository already exists'));
+        process.exit(1);
+      }
+
+      // Add repository to config
+      const repository: Repository = {
+        name,
+        owner,
+        url,
+        path,
+        host,
+        created_at: new Date().toISOString(),
+      };
+      config.repositories.push(repository);
+      await config.save();
+
+      // Wait for file to be written
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      console.log(chalk.green('Repository added successfully:'));
+      console.log('  Name:', chalk.cyan(repository.name));
+      console.log('  URL:', chalk.cyan(repository.url));
+      console.log('  Path:', chalk.cyan(repository.path));
+    } catch (err) {
+      console.error(chalk.red('Failed to add repository:', (err as Error).message));
       process.exit(1);
     }
-
-    // 创建仓库信息
-    const repository: Repository = {
-      name,
-      owner,
-      url,
-      host,
-      path: join(config.baseDir, host, owner, name),
-      created_at: new Date().toISOString(),
-    };
-
-    // 保存仓库信息
-    await saveRepositories([...repositories, repository]);
-
-    console.log(chalk.green('Repository added successfully:'));
-    console.log('  Name:', chalk.cyan(repository.name));
-    console.log('  URL:', chalk.cyan(repository.url));
-    console.log('  Path:', chalk.cyan(repository.path));
   },
 };
 
@@ -73,7 +76,7 @@ function parseRepositoryUrl(url: string): { owner: string; name: string; host: s
   // 尝试解析 URL
   const match = url.match(/^(?:https?:\/\/)?([^\/]+)\/([^\/]+)\/([^\/]+)$/);
   if (!match) {
-    return { owner: '', name: '', host: '' };
+    throw new Error('Invalid repository URL');
   }
 
   const [, host, owner, name] = match;
