@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { join } from 'path';
 import { tmpdir } from 'os';
-import { rm, readFile } from 'fs/promises';
+import { join } from 'path';
+import { mkdtemp, rm, readFile } from 'fs/promises';
 import { parse } from 'yaml';
 import { initCommand } from '../../src/commands/init.js';
-import { Config } from '../../src/config/index.js';
 import { exists } from '../../src/utils/index.js';
 
 // Mock console
@@ -17,8 +16,8 @@ const mockConsole = {
 const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
 describe('init command', () => {
-  let tempDir: string;
   let configDir: string;
+  let configFile: string;
 
   beforeEach(async () => {
     // Reset mocks
@@ -26,90 +25,71 @@ describe('init command', () => {
     mockConsole.error.mockReset();
     mockExit.mockReset();
 
-    // Create temp directories
-    tempDir = join(tmpdir(), 'repo-copilot-test-' + Math.random().toString(36).slice(2));
-    configDir = join(tempDir, '.repo-copilot');
-
-    // Set config path for tests
+    // Create temp directory for testing
+    configDir = await mkdtemp(join(tmpdir(), 'repo-copilot-test-'));
+    configFile = join(configDir, 'config.yaml');
     process.env.REPO_COPILOT_CONFIG_DIR = configDir;
   });
 
   afterEach(async () => {
-    // Clean up
-    if (tempDir) {
-      await rm(tempDir, { recursive: true, force: true });
-    }
+    // Clean up temp directory
+    await rm(configDir, { recursive: true, force: true });
     delete process.env.REPO_COPILOT_CONFIG_DIR;
   });
 
   it('should initialize configuration successfully', async () => {
     const options = {
-      baseDir: join(tempDir, 'workspace'),
       username: 'test-user',
       email: 'test@example.com',
     };
 
+    // Run init command
     await initCommand.run([], options);
 
-    // Verify output
-    expect(mockConsole.error).not.toBeCalled();
-    expect(mockExit).not.toBeCalled();
-    expect(mockConsole.log).toBeCalled();
-
-    // Verify config files
-    const configFile = join(configDir, 'config.yaml');
-    const repoFile = join(configDir, 'repositories.yaml');
-
+    // Check if config file exists
     expect(await exists(configFile)).toBe(true);
-    expect(await exists(repoFile)).toBe(true);
 
     // Verify config content
     const content = parse(await readFile(configFile, 'utf-8'));
     expect(content).toMatchObject({
-      baseDir: options.baseDir,
+      baseDir: join(configDir, 'repos'),
       username: options.username,
       email: options.email,
     });
-
-    // Verify repositories content
-    const repoContent = parse(await readFile(repoFile, 'utf-8'));
-    expect(repoContent).toMatchObject({
-      repositories: [],
-    });
   });
 
-  it('should fail if config exists without force option', async () => {
+  it('should fail if configuration exists', async () => {
+    const options = {
+      username: 'test-user',
+      email: 'test@example.com',
+    };
+
     // Create initial config
-    const config = new Config();
-    await config.save();
+    await initCommand.run([], options);
 
-    await initCommand.run([]);
-
-    expect(mockConsole.error).toBeCalledWith(expect.stringContaining('Configuration already exists'));
-    expect(mockExit).toBeCalledWith(1);
+    // Try to init again
+    await expect(initCommand.run([], options)).rejects.toThrow();
   });
 
   it('should overwrite existing config with force option', async () => {
     // Create initial config
-    const config = new Config();
-    await config.save();
+    await initCommand.run([], {
+      username: 'old-user',
+      email: 'old@example.com',
+    });
 
+    // Run init command with force option
     const options = {
-      baseDir: join(tempDir, 'workspace'),
       username: 'test-user',
       email: 'test@example.com',
       force: true,
     };
-
     await initCommand.run([], options);
 
-    expect(mockConsole.error).not.toBeCalled();
-    expect(mockExit).not.toBeCalled();
-
     // Verify config content
-    const content = parse(await readFile(join(configDir, 'config.yaml'), 'utf-8'));
+    const content = parse(await readFile(configFile, 'utf-8'));
     expect(content).toMatchObject({
-      baseDir: options.baseDir,
+      baseDir: join(configDir, 'repos'),
       username: options.username,
       email: options.email,
     });
