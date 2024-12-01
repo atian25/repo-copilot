@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
-import { exists } from '../../src/utils/index.js';
+import { exists, isSubDirectory } from '../../src/utils/index.js';
 
 describe('utils', () => {
   const TEST_DIR = join(tmpdir(), 'repo-copilot-test');
@@ -35,6 +35,19 @@ describe('utils', () => {
 
     it('should return false when parent directory does not exist', async () => {
       expect(await exists(join(TEST_DIR, 'not-exist', 'file.txt'))).toBe(false);
+    });
+  });
+
+  describe('isSubDirectory', () => {
+    it('should return true for subdirectories', () => {
+      expect(isSubDirectory('/parent', '/parent/child')).toBe(true);
+      expect(isSubDirectory('/parent', '/parent/child/grandchild')).toBe(true);
+    });
+
+    it('should return false for non-subdirectories', () => {
+      expect(isSubDirectory('/parent', '/other')).toBe(false);
+      expect(isSubDirectory('/parent', '/parent/../other')).toBe(false);
+      expect(isSubDirectory('/parent', '/parent')).toBe(false);
     });
   });
 });

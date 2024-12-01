@@ -12,7 +12,7 @@
     "dist"
   ],
   "scripts": {
-    "dev": "REPO_COPILOT_CONFIG_DIR=./tmp tsx src/cli.ts",
+    "dev": "tsx src/cli.ts",
     "build": "tsc",
     "lint": "eslint .",
     "test": "vitest --run",

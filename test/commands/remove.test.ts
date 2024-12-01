@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, writeFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { remove } from '../../src/commands/remove.js';
 import { Config } from '../../src/config/index.js';
 import { exists } from '../../src/utils/index.js';
+import { execSync } from 'child_process';
 
 describe('remove command', () => {
   let tempDir: string;
@@ -15,19 +16,24 @@ describe('remove command', () => {
     // Create temp directories
     tempDir = join(tmpdir(), 'repo-copilot-test-' + Math.random().toString(36).slice(2));
     configDir = join(tempDir, '.repo-copilot');
-    repoDir = join(tempDir, 'github.com/test/test-repo');
+    repoDir = join(tempDir, 'repos/github.com/test/test-repo');
 
     // Set config path for tests
     process.env.REPO_COPILOT_CONFIG_DIR = configDir;
 
-    // Create test repository directory
+    // Create test repository directory and initialize git
     await mkdir(repoDir, { recursive: true });
     await writeFile(join(repoDir, 'test.txt'), 'test content');
+    execSync('git init', { cwd: repoDir });
+    execSync('git add .', { cwd: repoDir });
+    execSync('git config user.name "test"', { cwd: repoDir });
+    execSync('git config user.email "test@example.com"', { cwd: repoDir });
+    execSync('git commit -m "init"', { cwd: repoDir });
 
     // Create test config
     await mkdir(configDir, { recursive: true });
     const config = new Config({
-      baseDir: tempDir,
+      baseDir: join(tempDir, 'repos'),
       repositories: [
         {
           name: 'test-repo',
@@ -40,9 +46,6 @@ describe('remove command', () => {
       ],
     });
     await config.save();
-
-    // Wait for file to be written
-    await new Promise(resolve => setTimeout(resolve, 100));
   });
 
   afterEach(async () => {
@@ -75,5 +78,26 @@ describe('remove command', () => {
 
   it('should throw error if repository not found', async () => {
     await expect(remove('non-existent-repo')).rejects.toThrow('Repository "non-existent-repo" not found');
+  });
+
+  it('should throw error if repository path is not under base directory', async () => {
+    const config = await Config.load();
+    config.repositories[0].path = '/some/other/path';
+    await config.save();
+
+    await expect(remove('test-repo', { force: true }))
+      .rejects.toThrow('Repository path /some/other/path is not under base directory');
+  });
+
+  it('should throw error if repository has uncommitted changes', async () => {
+    // Create uncommitted changes
+    await writeFile(join(repoDir, 'test.txt'), 'modified content');
+
+    await expect(remove('test-repo', { force: true }))
+      .rejects.toThrow('Repository has uncommitted changes');
+    
+    // Should work with --yes option
+    await remove('test-repo', { force: true, yes: true });
+    expect(await exists(repoDir)).toBe(false);
   });
 });
