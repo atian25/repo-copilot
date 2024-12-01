@@ -37,6 +37,19 @@ export async function remove(name: string, options: RemoveCommandOptions = {}) {
 export const removeCommand = {
   name: 'remove',
   description: 'Remove a repository from management',
+  usage: 'repo remove <repository> [options]',
+  options: [
+    {
+      name: 'force',
+      short: 'f',
+      description: 'Remove local repository files',
+      type: 'boolean',
+    },
+  ],
+  examples: [
+    'repo remove repo-name',
+    'repo remove repo-name --force',
+  ],
   async run(args: string[]) {
     if (args.length < 1) {
       console.error(chalk.red('Please specify the repository name to remove'));
