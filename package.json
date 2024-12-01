@@ -12,10 +12,11 @@
     "dist"
   ],
   "scripts": {
-    "dev": "tsx src/cli.ts",
+    "dev": "REPO_COPILOT_CONFIG_DIR=./tmp tsx src/cli.ts",
     "build": "tsc",
     "lint": "eslint .",
     "test": "vitest --run",
+    "test:watch": "vitest",
     "prepublishOnly": "pnpm build"
   },
   "keywords": [

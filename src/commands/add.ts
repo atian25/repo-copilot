@@ -2,12 +2,41 @@ import { join } from 'node:path';
 import { debuglog } from 'node:util';
 import chalk from 'chalk';
 import { Config, type Repository } from '../config/index.js';
+import { mkdir } from 'node:fs/promises';
+import { execSync } from 'node:child_process';
 
 const debug = debuglog('repo:add');
 
 export const addCommand = {
   name: 'add',
   description: 'Add a repository',
+  usage: 'repo add <repository> [options]',
+  options: [
+    {
+      name: 'name',
+      short: 'n',
+      description: 'Custom name for the repository',
+      type: 'string',
+    },
+    {
+      name: 'baseDir',
+      short: 'b',
+      description: 'Base directory for this repository',
+      type: 'string',
+    },
+    {
+      name: 'force',
+      short: 'f',
+      description: 'Force add even if repository exists',
+      type: 'boolean',
+    },
+  ],
+  examples: [
+    'repo add github.com/owner/repo',
+    'repo add github.com/owner/repo -n custom-name',
+    'repo add github.com/owner/repo -b ~/custom/path',
+    'repo add github.com/owner/repo --force',
+  ],
   async run(args: string[]) {
     if (args.length < 1) {
       console.error(chalk.red('Usage: repo add <repository_url>'));
@@ -34,6 +63,14 @@ export const addCommand = {
         process.exit(1);
       }
 
+      // Create directory
+      await mkdir(path, { recursive: true });
+
+      // Clone repository
+      const gitUrl = `git@${host}:${owner}/${name}.git`;
+      console.log(chalk.gray('Cloning repository...'));
+      execSync(`git clone ${gitUrl} ${path}`, { stdio: 'inherit' });
+
       // Add repository to config
       const repository: Repository = {
         name,
@@ -46,10 +83,7 @@ export const addCommand = {
       config.repositories.push(repository);
       await config.save();
 
-      // Wait for file to be written
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      console.log(chalk.green('Repository added successfully:'));
+      console.log(chalk.green('\nRepository added successfully:'));
       console.log('  Name:', chalk.cyan(repository.name));
       console.log('  URL:', chalk.cyan(repository.url));
       console.log('  Path:', chalk.cyan(repository.path));
