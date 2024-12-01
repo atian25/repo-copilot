@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-import { parseArgs } from 'node:util';
-import debug from 'debug';
+import { parseArgs, debuglog } from 'node:util';
 import chalk from 'chalk';
 import { helpCommand } from './commands/help.js';
+import { addCommand } from './commands/add.js';
 
-const log = debug('repo:cli');
+const log = debuglog('repo:cli');
 
 interface Command {
   name: string;
@@ -15,6 +15,7 @@ interface Command {
 
 const commands: Command[] = [
   helpCommand,
+  addCommand,
 ];
 
 async function main() {
